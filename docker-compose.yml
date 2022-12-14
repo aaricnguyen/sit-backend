@@ -1,0 +1,29 @@
+version: '3.7'
+
+services:
+  redis:
+    image: redis:latest
+    container_name: cache
+    ports:
+      - 6379:6379
+    networks:
+      - sit_network
+  sit_profile_analizer:
+    container_name: sit_profile_analizer_api
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 4500:4500
+    links:
+      - redis
+    environment:
+      - REDIS_URL=redis://cache
+      - DATABASE_USER=a1
+      - DATABASE_PASSWORD=Maglev123!
+      - DATABASE_HOST=10.78.96.161
+      - DATABASE_NAME=custConfigDB
+    networks:
+      - sit_network
+networks:
+  sit_network:

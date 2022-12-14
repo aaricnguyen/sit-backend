@@ -1,0 +1,914 @@
+# -*- coding: utf-8 -*-
+"""
+Created on June 22 2021
+@author: venaddep
+"""
+import csv, re, os
+from ciscoconfparse import *
+from random import sample
+from sqlalchemy import create_engine, types
+import pandas as pd
+import lib
+
+m_user='a1'
+m_password='Maglev123!'
+m_host='127.0.0.1'
+
+engine = create_engine('mysql://{0}:{1}@{2}/custConfigDB'.format(m_user,m_password,m_host))
+print(engine)
+
+def myShuffle(x, *s):
+    x[slice(*s)] = sample(x[slice(*s)], len(x[slice(*s)]))
+
+#dirname  = '/home/bjatti/configCompareTool/project/custConfs/cfgFiles/Sit_Configs/'
+dirname  = '/home/bjatti/configCompareTool/project/custConfs/cfgFiles/test/'
+#dirname  = '/home/bjatti/configCompareTool/project/custConfs/cfgFiles/'
+#dirname  = '/ws/venaddep-sjc/pyatsLatest/SIT_Project/configParser/'
+#fileList = [dirname+'86937_2_25.cfg',dirname+'81640_2_2.cfg',dirname+'4605_2_1.cfg']
+
+fileList          = []
+TRUE              = 1
+FALSE             = 0
+cust_segment      = ''
+cust_mgmtstn      = ''
+cust_secstation   = ''
+cust_dnac         = ''
+cust_devicepin    = ''
+cust_topologytype = '3 tier'
+
+if os.path.exists(os.path.join(dirname)):
+    for (root,dirs,files) in os.walk(dirname):
+        for f in files:
+            if f.endswith('.cfg'):    
+                fileList.append(dirname+f)            
+
+# csv writer
+csvfile = open('/home/bjatti/configCompareTool/project/custConfs/cfgFiles/test/temp.csv', 'w', newline='') # This is for Internal SIT Configs Path
+# csvfile = open('ciscoconf_6800.csv', 'w', newline='') # This is for 6800 Path
+# csvfile = open('ciscoconf_6500.csv', 'w', newline='') # This is for 6500 Path
+
+ciscowriter = csv.writer(csvfile,delimiter=',')
+
+# Define list variable for Headers              
+csvheader = ['cust_id','cust_segment','cust_topologytype','cust_devicepin','cust_mgmtstn','cust_secstation','cust_dnac',
+             'techsupport_sw_type','techsupport_uptime','techsupport_cpu','techsupport_memory','techsupport_hastate',
+             'techsupport_version','techsupport_sl','techsupport_systemmtu',           
+             'l2_vtp','l2_cdp','l2_lldp','l2_udld','l2_udldAgg','l2_pagp','l2_lacp','l2_on','l2_l2ec','l2_pvst','l2_rstp',
+             'l2_mst','l2_stormBcast','l2_stormMcast','l2_uufb','l2_access','l2_trunk','l2_vlan','l2_errdisableRec','l2_macacl',
+             'l3v4_l3ec','l3v4_l3if','l3v4_tunnel','l3v4_l3dot1q','l3v4_svi','l3v4_ospfv4','l3v4_eigrpv4','l3v4_ripv4','l3v4_isis',
+             'l3v4_bgp','l3v4_static','l3v4_ipacl','l3v4_bfdv4','l3v6_ipv6acl','l3v6_ospfv6','l3v6_eigrpv6','l3v6_bfdv6',
+             'sec_portsec','sec_dot1x','sec_mab','sec_webauth','sec_vvlan','sec_ctsSAP','sec_radiusv4','sec_radiusv6','sec_tacac','sec_dhcpSnoop',
+             'mcast_mcast','mcast_mcastv6','mcast_igmp','mcast_pim','mcast_pimv6','mcast_mld','mcast_msdp',
+             'policy_qos','policy_police','policy_mark','policy_shape','policy_fnf',
+             'platform_autoconf','platform_template','platform_asp','platform_svl','platform_stack','platform_len_stk',
+             'service_dhcpServer','service_dns','service_span','service_rspan','service_erspan','service_http','service_https','service_callhome',
+             'mgmt_tftp','mgmt_ftp','mgmt_mgmt','mgmt_archiveLogging','mgmt_snmpv1','mgmt_snmpv2','mgmt_snmpv3','mgmt_snmp','mgmt_snmpTrap',
+             'mgmt_syslog','mgmt_ssh','mgmt_telnet',          
+             'prog_mdns','mpls_mpls',
+             'up_count','access_ports_count','trunk_ports_count','l3_ports_count','up_tunnel_count','loopback_count','ipv6_ports_count',
+             'pim_ports_count','pimv6_ports_count','dot1q_ports_count','policy_map_count','class_map_count','span_count','acl_count','v6acl_count',
+             'macacl_count','static_route_count','bfd_count','l2_po_count','l3_po_count','ipv6_count','qos_count','psec_count','dot1x_count',
+             'mab_count','webauth_count','svi_count','vrf_count','ospf_count','eigrp_count','bgp_count','rip_count','ospf_peer_count','eigrp_peer_count',
+             'rip_peer_count','bgp_peer_count','isis_peer_count','flow_mon_count','flow_rec_count','flow_exp_count','mac',
+            ]             
+                  
+# Write Header Row into '.csv' file
+ciscowriter.writerow(csvheader)
+
+try:    
+    for line in fileList:
+    
+        # Parsing file by file to validate 
+        parse = CiscoConfParse(line)
+    
+        # Grep the number to identify CustomerID from filename
+        mat = re.match(dirname+r'([a-zA-Z0-9]+)\_*',line)
+        cust_id = mat.group(1)     
+    
+        # Switch Type
+        r0 = ''    
+        tech_sw_type = parse.find_objects(' DESCR:')
+        for obj in tech_sw_type:
+            r0 = obj.re_match(r' DESCR: "(.*)"')
+            if(r0):
+                break
+        techsupport_sw_type = r0
+        
+        # Uptime
+        r1=r2=r3=r4=r5=r6=''
+        tech_uptime = parse.find_objects('Available system uptime')
+        for obj in tech_uptime:
+            r1 = obj.re_match(r' Available system uptime =(.*)')
+            
+        if(r1==""):
+            tech_uptime = parse.find_objects('uptime is ')
+            for obj in tech_uptime:
+                r1 = obj.re_match(r'uptime is (.*)')
+        
+        # cpu
+        tech_cpu = parse.find_objects('^CPU utilization for five seconds:')
+        for obj in tech_cpu:
+            r2 = obj.re_match(r'one minute: (.*)%;')
+            if r2:
+                break
+    
+        # Memory get % of memory free / used
+        tech_mem = parse.find_objects('^System memory  :')
+        for obj in tech_mem:
+            r31  = obj.re_match(r':(.*)K total')
+            r32  = obj.re_match(r', (.*)K used')
+            r311 = int(r31)
+            r322 = int(r32)
+            r3   = int(r322/r311*100)
+    
+        # Another memory output
+        tech_mem = parse.find_objects('^Processor Pool Total:')
+        for obj in tech_mem:
+            r31  = obj.re_match(r'Processor Pool Total: (.*) Used')
+            r32  = obj.re_match(r'Used: (.*) Free')
+            r311 = int(r31)
+            r322 = int(r32)
+            r3   = int(r322/r311*100)
+    
+        # HA State
+        r4 = 'Simplex'
+        tech_hastate = parse.find_objects('Hardware Mode =')
+        for obj in tech_hastate:
+            r4 = obj.re_match(r'Hardware Mode = (.*)')
+    
+        # Version
+        r5 = 0
+        tech_version = parse.find_objects('Image Version =')
+        for obj in tech_version:
+            r5 = obj.re_match(r'Image Version =.* Version (.*) RELEASE')
+    
+        if r5 == 0 :
+            tech_version = parse.find_objects('Cisco IOS Software ')
+            for obj in tech_version:
+                r5 = obj.re_match(r' Version (.*),')
+                if r5 == "":
+                    r5 = obj.re_match(r' Version (.*) \[')
+                    if r5 == "" :
+                        break
+    
+        # System MTU
+        techsupport_systemmtu = parse.find_objects('system mtu')
+        for obj in techsupport_systemmtu:
+            r6 = obj.re_match(r'system mtu(.*)')
+        if r6 == 0:
+            r6 = '1500'        
+                
+        
+        # MAC Address
+        mac = 0 
+        mac_scale = ""
+        mac_scale = parse.find_objects(r'  ([0-9a-f]{4})[.]([0-9a-f]{4})[.]([0-9a-f]{4})  ')
+        for obj in mac_scale:
+            mac = mac+1
+        
+        techsupport_uptime    = r1
+        techsupport_cpu       = r2
+        techsupport_memory    = r3
+        techsupport_hastate   = r4
+        techsupport_version   = r5
+        techsupport_sl        = ''
+        techsupport_systemmtu = r6
+        
+        # Layer2
+        # ======
+        # VTP Version
+        if parse.find_objects('vtp version 2'):
+            vtp = 1
+        elif parse.find_objects('vtp version 3'):
+            vtp = 1
+        else:
+            vtp = 1
+    
+        # CDP
+        if parse.find_objects('no cdp run'):
+            cdp = FALSE
+        else:
+            cdp = TRUE
+    
+        # LLDP
+        if parse.find_objects('no lldp run'):
+            lldp = FALSE
+        else:
+            lldp = TRUE
+    
+        # UDLD
+        if parse.find_objects('no udld enable'):
+            udld = FALSE
+        else:
+            udld = TRUE
+    
+        # Fast UDLD
+        if parse.find_objects('udld aggressive'):
+            udldAgg = TRUE
+        else:
+            udldAgg = FALSE
+    
+        # EtherChannel pAgp
+        if parse.find_objects('mode desirable') or parse.find_objects('mode auto'):
+            pagp = TRUE
+        else:
+            pagp = FALSE
+    
+        # EtherChannel LACP
+        if parse.find_objects('mode active') or parse.find_objects('mode passive'):
+            lacp = TRUE
+        else:
+            lacp = FALSE
+    
+        # EtherChannel ON
+        if parse.find_objects('mode on'):
+            on = TRUE
+        else:
+            on = FALSE
+    
+        # Layer2 EtherChannel 
+        if parse.find_parents_w_child('^interf','switchport mode','channel-group '):
+            l2ec = TRUE
+        else:
+            l2ec = FALSE
+    
+        # PVST
+        if parse.find_objects('spanning-tree mode pvst'):
+            pvst = TRUE
+        else:
+            pvst = FALSE
+    
+        # RSTP
+        if parse.find_objects('spanning-tree mode rapid'):
+            rstp = TRUE
+        else:
+            rstp = FALSE
+    
+        # MST
+        if parse.find_objects('spanning-tree mode mst'):
+            mst = TRUE
+        else:
+            mst = FALSE
+    
+        # StormControl BCAST
+        if parse.find_parents_w_child('^interf','storm-control broadcast') or parse.find_parents_w_child('^template','storm-control broadcast'):
+            stormBcast = TRUE
+        else:
+            stormBcast = FALSE
+    
+        # StormControl MCAST
+        if parse.find_parents_w_child('^interf','storm-control multicast') or parse.find_parents_w_child('^template','storm-control multicast'):
+            stormMcast = TRUE
+        else:
+            stormMcast = FALSE
+    
+        # UUFB
+        if parse.find_objects('switchport block unicast'):
+            uufb = TRUE
+        else:
+            uufb = FALSE
+    
+        # Access Ports
+        if parse.find_parents_w_child('^interf','switchport mode access'):
+            access = TRUE
+        else:
+            access = FALSE
+    
+        # Trunk Ports
+        if parse.find_parents_wo_child('^interf','switchport mode access'):
+            trunk = TRUE
+        else:
+            trunk = FALSE
+    
+        # Vlans
+        if parse.find_objects('^vlan'):
+            vlan = TRUE
+        else:
+            vlan = FALSE
+    
+        # Err-Disable Recovery Cause
+        if parse.find_objects('errdisable recovery cause'):
+            errdisableRec = TRUE
+        else:
+            errdisableRec = FALSE        
+    
+        # Mac Acl
+        if parse.find_objects('mac access'):
+            macacl = TRUE
+        else:
+            macacl = FALSE        
+    
+        # Layer3
+        # ======
+        # Layer3 EtherChannel
+        if parse.find_parents_w_child('^interf','no switchport','channel-group '):
+            l3ec = TRUE
+        else:
+            l3ec = FALSE
+    
+        # Layer3 Interfaces
+        if parse.find_parents_w_child('^interf','no switchport'):
+            l3if = TRUE
+        else:
+            l3if = FALSE
+    
+        # Tunnel Interfaces
+        if parse.find_parents_wo_child('^interface Tunnel','shutdown'):
+            tunnel = TRUE
+        else:
+            tunnel = FALSE
+    
+        # Layer3 Dot1q Sub Interface
+        if parse.find_parents_wo_child(r'^interface.*\.\d+','shutdown'):
+            l3dot1q = TRUE
+        else:
+            l3dot1q = FALSE
+    
+        # SVI
+        if parse.find_parents_wo_child('^interface Vlan','shutdown'):
+            svi = TRUE
+        else:
+            svi = FALSE
+            
+        # Ospf
+        if parse.find_parents_w_child('^router ospf','network'):
+            ospfv4 = TRUE
+        else:
+            ospfv4 = FALSE
+               
+        # Eigrp
+        if parse.find_parents_w_child('^router eigrp','network'):
+            eigrpv4 = TRUE
+        else:
+            eigrpv4 = FALSE
+    
+        # Rip
+        if parse.find_parents_w_child('^router rip','network'):
+            ripv4 = TRUE
+        else:
+            ripv4 = FALSE
+    
+        # Isis
+        if parse.find_parents_wo_child('^router isis','shut'):
+            isis = TRUE
+        else:
+            isis = FALSE
+    
+        # Bgp
+        if parse.find_parents_wo_child('^router bgp','shut'):
+            bgp = TRUE
+        else:
+            bgp = FALSE
+    
+        if bgp == TRUE:
+            cust_devicepin = 'Core'
+            
+        # Static Routes
+        if parse.find_objects('ip route '):
+            static = TRUE
+        else:
+            static = FALSE
+    
+        # Ip Access-list
+        if parse.find_objects('ip access'):
+            ipacl = TRUE
+        else:
+            ipacl = FALSE  
+    
+        # BFDv4
+        if parse.find_parents_w_child('^router ','bfd all-interface'):
+            bfdv4 = TRUE
+        else:
+            bfdv4 = FALSE        
+    
+        # Ipv6 Access-list
+        if parse.find_objects('ipv6 access'):
+            ipv6acl = TRUE
+        else:
+            ipv6acl = FALSE
+    
+        # Ospfv3
+        if parse.find_parents_wo_child('^ipv6 router','shut'):
+            ospfv6 = TRUE
+        else:
+            ospfv6 = FALSE
+    
+        # EigrpV6
+        if parse.find_parents_w_child('^router eigrp','address-family ipv6'):
+            eigrpv6 = TRUE
+        else:
+            eigrpv6 = FALSE
+    
+        # BFDv6
+        if parse.find_parents_w_child('^ipv6 router ','bfd all-interface'):
+            bfdv6 = TRUE
+        else:
+            bfdv6 = FALSE        
+            
+        # Security
+        # ========
+        # PortSec
+        if parse.find_parents_w_child('^interf','switchport port-sec') or parse.find_parents_w_child('^template','switchport port-sec'):
+            portsec = TRUE
+        else:
+            portsec = FALSE        
+    
+        # Dot1x 
+        if parse.find_objects('dot1x system-auth-control') and parse.find_objects('dot1x pae auth'):
+            dot1x = TRUE
+        else:
+            dot1x = FALSE
+    
+        # Mab
+        if parse.find_objects('dot1x system-auth-control') and parse.find_objects('mab'):
+            mab = TRUE
+        else:
+            mab = FALSE
+    
+        # WebAuth
+        if parse.find_objects('dot1x system-auth-control') and parse.find_objects('webauth'):
+            webauth = TRUE
+        else:
+            webauth = FALSE
+    
+        # Voice Vlan
+        if parse.find_objects('voice vlan'):
+            vvlan = TRUE
+        else:
+            vvlan = FALSE
+    
+        if mab == TRUE or dot1x == TRUE or vvlan == TRUE or webauth == TRUE:
+            cust_devicepin = 'Access'
+            
+        # CTS SAP
+        if parse.find_objects('cts man'):
+            ctsSAP = TRUE
+        else:
+            ctsSAP = FALSE
+    
+        # Radius V4
+        if parse.find_parents_w_child('^radius server','address ipv4'):
+            radiusv4 = TRUE
+        else:
+            radiusv4 = FALSE
+    
+        # Radius V6
+        if parse.find_parents_w_child('^radius server','address ipv6'):
+            radiusv6 = TRUE
+        else:
+            radiusv6 = FALSE
+    
+        # AAA Tacacs+
+        if parse.find_objects('tacac'):
+            tacac = TRUE
+        else:
+            tacac = FALSE
+    
+        # Dhcp Snooping
+        if parse.find_objects('ip dhcp snooping'):
+            dhcpSnoop = TRUE
+        else:
+            dhcpSnoop = FALSE        
+    
+        # Multicast
+        # =========
+        # Mcastv4
+        if parse.find_objects('ip multicast-routing'):
+            mcast = TRUE
+        else:
+            mcast = FALSE
+    
+        # Mcastv6
+        if parse.find_objects('ipv6 multicast-routing'):
+            mcastv6 = TRUE
+        else:
+            mcastv6 = FALSE
+    
+        # Igmp
+        # Igmp Snooping
+        if parse.find_objects('ip igmp'):
+            igmp = TRUE
+        else:
+            igmp = FALSE
+    
+        # Pim
+        if parse.find_parents_w_child('^interface ','ip pim'):
+            pim = TRUE
+        else:
+            pim = FALSE
+    
+        # PimV6
+        if parse.find_parents_w_child('^interface ','ip pim','ipv6 address'):
+            pimv6 = TRUE
+        else:
+            pimv6 = FALSE
+    
+        # Mld Snooping
+        if parse.find_objects('ipv6 mld snooping'):
+            mld = TRUE
+        else:
+            mld = FALSE
+    
+        # MSDP
+        if parse.find_objects('msdp'):
+            msdp = TRUE
+        else:
+            msdp = FALSE
+    
+        # Policy
+        # ======
+        # QOS
+        if parse.find_parents_w_child('^interface ','service-policy'):
+            qos = TRUE
+        else:
+            qos = FALSE
+    
+        # Policing
+        if parse.find_parents_w_child('^policy-map ','police'):
+            police = TRUE
+        else:
+            police = FALSE
+    
+        # Marking
+        if parse.find_parents_w_child('^policy-map ','set'):
+            mark = TRUE
+        else:
+            mark = FALSE
+    
+        # Shaping
+        if parse.find_parents_w_child('^policy-map ','shape'):
+            shape = TRUE
+        else:
+            shape = FALSE
+    
+        # Netflow
+        if parse.find_objects('flow export') and parse.find_objects('flow moni') and parse.find_objects('flow rec'):
+            fnf = TRUE
+        else:
+            fnf = FALSE
+    
+        # Platform
+        # ========      
+        # Autoconf
+        if parse.find_objects('autoconf enable'):
+            autoconf = TRUE
+        else:
+            autoconf = FALSE
+    
+        # Interface Template
+        if parse.find_objects('source template'):
+            template = TRUE
+        else:
+            template = FALSE
+    
+        # ASP
+        if parse.find_parents_w_child('^interface ','macro auto'):
+            asp = TRUE
+        else:
+            asp = FALSE
+    
+        # SVL
+        if parse.find_objects('stackwise-virtual'):
+            svl = TRUE
+        else:
+            svl = FALSE
+    
+        # Stacking
+        stk = parse.find_objects(r'switch.*provi')
+        len_stk = len(stk)
+        if len(stk) > 1:
+            stack = TRUE
+        else:
+            stack = FALSE
+    
+        # Services
+        # ========    
+        # Dhcp Server
+        if parse.find_objects('ip dhcp pool'):
+            dhcpServer = TRUE
+        else:
+            dhcpServer = FALSE
+    
+        # DNS
+        if parse.find_objects('^ip domain'):
+            dns = TRUE
+        else:
+            dns = FALSE
+    
+        # Span
+        if parse.find_objects(r'monitor session.*destination interface'):
+            span = TRUE
+        else:
+            span = FALSE
+    
+        # RSpan
+        if parse.find_objects(r'monitor session.*remote vlan'):
+            rspan = TRUE
+        else:
+            rspan = FALSE
+    
+        # ERSpan
+        if parse.find_objects(r'erspan'):
+            erspan = TRUE
+        else:
+            erspan = FALSE        
+    
+        # Http Server
+        if parse.find_objects('^ip http server'):
+            http = TRUE
+        else:
+            http = FALSE
+    
+        # Https Server
+        if parse.find_objects('^ip http secure-server'):
+            https = TRUE
+        else:
+            https = FALSE
+    
+        # Call Home
+        if parse.find_objects('^call-home'):
+            callhome = TRUE
+        else:
+            callhome = FALSE
+            
+        # Management
+        # ==========    
+        # Tftp
+        if parse.find_objects('^tftp-server'):
+            tftp = TRUE
+        else:
+            tftp = FALSE
+    
+        # Ftp
+        if parse.find_objects('^ip ftp'):
+            ftp = TRUE
+        else:
+            ftp = FALSE
+    
+        # Mgmt Port
+        if parse.find_parents_w_child('^interface ','vrf forwarding Mgmt'):
+            mgmt = TRUE
+        else:
+            mgmt = FALSE
+    
+        # Logging Archive
+        if parse.find_objects('^archive'):
+            archiveLogging = TRUE
+        else:
+            archiveLogging = FALSE
+    
+        # SnmpV1
+        if parse.find_objects(r'snmp-server.*v1'):
+            snmpv1 = TRUE
+        else:
+            snmpv1 = FALSE
+    
+        # Snmp2c
+        if parse.find_objects('snmp-server.*2c'):
+            snmpv2 = TRUE
+        else:
+            snmpv2 = FALSE
+    
+        # SnmpV3
+        if parse.find_objects('snmp-server.*v3'):
+            snmpv3 = TRUE
+        else:
+            snmpv3 = FALSE
+    
+        # Snmp
+        if parse.find_objects('snmp-server'):
+            snmp = TRUE
+        else:
+            snmp = FALSE
+    
+        # Snmp Trap
+        if parse.find_objects('snmp trap'):
+            snmpTrap = TRUE
+        else:
+            snmpTrap = FALSE
+    
+        # Syslog Server
+        if parse.find_objects('logging host'):
+            syslog = TRUE
+        else:
+            syslog = FALSE
+    
+        # SSH
+        if parse.find_objects('^ip ssh'):
+            ssh = TRUE
+        else:
+            ssh = FALSE
+    
+        # Telnet 
+        if parse.find_objects('transport input all') or parse.find_objects('transport input telnet'):
+            telnet = TRUE
+        else:
+            telnet = FALSE        
+    
+        # Program
+        # =======
+        # MDNS
+        if parse.find_objects('mdns'):
+            mdns = TRUE
+        else:
+            mdns = FALSE
+    
+        # MPLS 
+        # ====
+        # Mpls
+        if parse.find_objects('mpls ip'):
+            mpls = TRUE
+        else:
+            mpls = FALSE
+    
+        # Scaling Part
+        # ============
+        # Number of UP Ports
+        up = parse.find_parents_wo_child('^interface ','shut')
+        up_count = len(up)
+    
+        # Number of Layer2 Ports
+        access_ports = parse.find_parents_w_child('^interface ','switchport mode access')
+        access_ports_count = len(access_ports)
+        
+        # Number of Trunk Ports
+        trunk_ports = parse.find_parents_w_child('^interface ','switchport mode trunk')
+        trunk_ports_count = len(trunk_ports)
+    
+        # Number of Layer3 Ports
+        l3_ports = parse.find_parents_w_child('^interface ','no switchport')
+        l3_ports_count = len(l3_ports)
+    
+        # Number of Tunnel Interfaces
+        up_tunnel = parse.find_parents_wo_child('^interface Tunn','shut')
+        up_tunnel_count = len(up_tunnel)
+        
+        # Number of Loopback Interfaces
+        loopback = parse.find_objects('interface Loop')
+        loopback_count = len(loopback)
+    
+        # Number of Ipv6 Interfaces
+        ipv6_ports = parse.find_parents_w_child('^interface ','ipv6 enable')
+        ipv6_ports_count = len(ipv6_ports)
+    
+        # Number of Pim Interfaces
+        pim_ports = parse.find_parents_w_child('^interface ','ip pim')
+        pim_ports_count = len(pim_ports)
+        
+        # Number of Ipv6 Pim Interfaces
+        pimv6_ports = parse.find_parents_w_child('^interface ','ipv6 pim')
+        pimv6_ports_count = len(pimv6_ports)
+    
+        # Number of Dot1q SubInterfaces
+        dot1q_ports = parse.find_parents_w_child('^interface ','encapsulation dot1q')
+        dot1q_ports_count = len(dot1q_ports)
+    
+        # Number of Policy Maps
+        policy_map = parse.find_objects('policy-map')
+        policy_map_count = len(policy_map)
+    
+        # Number of Class Maps
+        class_map = parse.find_objects('class-map')
+        class_map_count = len(class_map)
+    
+        # Number of Span Sessions
+        span_s = parse.find_objects('monitor session')
+        span_count = len(span_s)
+    
+        # Number of Acls
+        acl = parse.find_objects('ip access-list ')
+        acl_count = len(acl)
+    
+        # Number of Ipv6 Acls
+        v6acl = parse.find_objects('ipv6 access-list ')
+        v6acl_count = len(v6acl)
+    
+        # Number of Mac Acls
+        macacl_l = parse.find_objects('mac access-list ')
+        macacl_count = len(macacl_l)
+    
+        # Number of Static Routes
+        static_route = parse.find_objects('ip route ')
+        static_route_count = len(static_route)
+    
+        # Number of Bfd Interfaces
+        bfd_tim = parse.find_objects('bfd interval ')
+        bfd_count = len(bfd_tim)
+    
+        # Number of Layer2 EtehrChannel
+        l2_po_c = parse.find_parents_w_child('^interface Po','switchport mode')
+        l2_po_count = len(l2_po_c)
+    
+        # Number of Layer3 EtherChannel
+        l3_po_c = parse.find_parents_w_child('^interface Po','no switchport')
+        l3_po_count = len(l3_po_c)
+    
+        # Number of Ipv6 Interfaces
+        ipv6_c = parse.find_parents_w_child('^interface ','ipv6 enable')
+        ipv6_count = len(ipv6_c)
+    
+        # Number of Qos Ports
+        qos_c = parse.find_parents_w_child('^interface ','service-policy')
+        qos_count = len(qos_c)
+    
+        # Number of Portsec Ports
+        psec_c = parse.find_parents_w_child('^interface ','switchport port-sec')
+        psec_count = len(psec_c)
+    
+        # Number of Dot1x Ports
+        dot1x_c = parse.find_parents_w_child('^interface ','source template')
+        dot1x_count = len(dot1x_c)
+    
+        # Number of Mab Ports
+        mab_count = dot1x_count
+        
+        # Number of WebAuth Ports
+        webauth_count = dot1x_count
+        
+        # Number of SVIs
+        svi_c = parse.find_parents_wo_child('^interface Vlan','shut')
+        svi_count = len(svi_c)
+    
+        # Number of VRFs
+        vrf_c = parse.find_objects('^vrf definition')
+        vrf_count = len(vrf_c)
+    
+        # Number of Ospf Processes
+        ospf_c = parse.find_objects('^router ospf')
+        ospf_count = len(ospf_c)
+    
+        # Number of Eigrp Processes
+        eigrp_c = parse.find_objects('^router eigrp')
+        eigrp_count = len(eigrp_c)
+    
+        # Number of Bgp Processes
+        bgp_c = parse.find_objects('^router bgp')
+        bgp_count = len(bgp_c)
+    
+        # Number of Rip Processes
+        rip_c = parse.find_objects('^router rip')
+        rip_count = len(rip_c)
+    
+        # Number of Ospf Peers
+        ospf_peer_c = parse.find_parents_w_child('^router ospf','network')
+        ospf_peer_count = len(ospf_peer_c)
+    
+        # Number of Eigrp Peers
+        eigrp_peer_c = parse.find_parents_w_child('^router eigrp','network')
+        eigrp_peer_count = len(eigrp_peer_c)
+    
+        # Number of Rip Peers
+        rip_peer_c = parse.find_parents_w_child('^router rip','network')
+        rip_peer_count = len(rip_peer_c)
+    
+        # Number of Bgp Peers
+        bgp_peer_c = parse.find_parents_w_child('^router bgp','neighbor')
+        bgp_peer_count = len(bgp_peer_c)
+    
+        # Number of Isis Peers
+        isis_peer_c = parse.find_parents_w_child('^router isis','net')
+        isis_peer_count = len(isis_peer_c)
+    
+        # Number of Flow Monitors
+        flow_mon_c = parse.find_objects('^flow moni')
+        flow_mon_count = len(flow_mon_c)
+    
+        # Number of Flow Recorders
+        flow_rec_c = parse.find_objects('^flow rec')
+        flow_rec_count = len(flow_rec_c)
+    
+        # Number of Flow Exporters
+        flow_exp_c = parse.find_objects('^flow exp')
+        flow_exp_count = len(flow_exp_c)
+                  
+        csvrow = [cust_id,cust_segment,cust_topologytype,cust_devicepin,cust_mgmtstn,cust_secstation,cust_dnac,
+                  techsupport_sw_type,techsupport_uptime,techsupport_cpu,techsupport_memory,techsupport_hastate,
+                  techsupport_version,techsupport_sl,techsupport_systemmtu,
+                  vtp,cdp,lldp,udld,udldAgg,pagp,lacp,on,l2ec,pvst,rstp,mst,stormBcast,stormMcast,uufb,access,trunk,vlan,errdisableRec,macacl,
+                  l3ec,l3if,tunnel,l3dot1q,svi,ospfv4,eigrpv4,ripv4,isis,bgp,static,ipacl,bfdv4,ipv6acl,ospfv6,eigrpv6,bfdv6,
+                  portsec,dot1x,mab,webauth,vvlan,ctsSAP,radiusv4,radiusv6,tacac,dhcpSnoop,
+                  mcast,mcastv6,igmp,pim,pimv6,mld,msdp,
+                  qos,police,mark,shape,fnf,
+                  autoconf,template,asp,svl,stack,len_stk,
+                  dhcpServer,dns,span,rspan,erspan,http,https,callhome,
+                  tftp,ftp,mgmt,archiveLogging,snmpv1,snmpv2,snmpv3,snmp,snmpTrap,syslog,ssh,telnet,
+                  mdns,mpls,
+                  up_count,access_ports_count,trunk_ports_count,l3_ports_count,up_tunnel_count,loopback_count,
+                  ipv6_ports_count,pim_ports_count,pimv6_ports_count,dot1q_ports_count,policy_map_count,class_map_count,span_count,acl_count,v6acl_count,
+                  macacl_count,static_route_count,bfd_count,l2_po_count,l3_po_count,ipv6_count,qos_count,psec_count,dot1x_count,mab_count,webauth_count,
+                  svi_count,vrf_count,ospf_count,eigrp_count,bgp_count,rip_count,ospf_peer_count,eigrp_peer_count,rip_peer_count,bgp_peer_count,
+                  isis_peer_count,flow_mon_count,flow_rec_count,flow_exp_count,mac
+                 ]                  
+    
+        # Write Config File entries as rows into '.csv' file
+        ciscowriter.writerow(csvrow)
+        myShuffle(csvrow,60)                    
+except:
+    print("An exception occurred")            
+
+csvfile.close()
+print('Total No. of Cfg Files Available in Path : {}'.format(len(fileList)))
+
+df = pd.read_csv('/home/bjatti/configCompareTool/project/custConfs/cfgFiles/test/temp.csv', sep=',', encoding='utf8')
+df.to_sql('customerData', con=engine, index=False, if_exists='append')
+result = lib.customersData()
