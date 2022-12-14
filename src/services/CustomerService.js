@@ -80,7 +80,7 @@ export const getCategoriesV2 = (results = []) => {
 
     }
   });
-  // console.log("categories", categories);
+
   return {categories,categoriesField,arrQueryUnique};
 };
 export const getMatchDataV2 = async ({internalCustomers, cust_segment_externalCustomers,cust_segment_internalCustomers,internalCustomersObj,categories}) => {
@@ -172,7 +172,7 @@ const getCategories = (results = [], categories = {}) => {
       categories.featureCounts.push(key);
     }
   });
-  // console.log("categories", categories);
+
   return categories;
 };
 
@@ -438,6 +438,7 @@ export const saveOneConfig = async (results) => {
   const externalCustomer = externalCustomerData[0];
   externalCustomers.push(externalCustomer);
   RedisService.set('externalCustomers', externalCustomers);
+
   return externalCustomer;
 };
 
@@ -451,7 +452,7 @@ export const handleConfigDataByCustomer = async (externalCustomer) => {
 
   if (custSegment) {
     const internalCustomer = internalCustomers.find(
-      (cust) => cust.cust_segment === custSegment,
+      (cust) => cust.cust_segment == custSegment,
     );
 
     if (internalCustomer) {
