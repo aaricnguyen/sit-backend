@@ -343,10 +343,10 @@ const getSumCategoryV2 =  async(_data) => {
           _sumCat.set(categoriesField[field],[])
         }
         const currentSumCat = _sumCat.get(categoriesField[field])
-        currentSumCat.push(field)
-
-        _sumCat.set(categoriesField[field],currentSumCat)
-
+        if(config[field] === '1'){
+          currentSumCat.push(field)
+          _sumCat.set(categoriesField[field],currentSumCat)
+        }
       }
       if(categoriesField[field] && categoriesField[field] === 'featureCounts'){
         if(!_rs[field]){
@@ -357,8 +357,8 @@ const getSumCategoryV2 =  async(_data) => {
           }
         } 
         const sum = Number(_rs[field].sum) + Number(config[field])
-        const max = _rs[field].max > config[field] ? _rs[field].max : config[field]
-        const min = _rs[field].min < config[field] ? _rs[field].min : config[field]
+        const max = Number(_rs[field].max) > Number(config[field]) ? _rs[field].max : config[field]
+        const min = Number(_rs[field].min) < Number(config[field]) ? _rs[field].min : config[field]
         _rs[field] = {
           feature: field,
           total: count,
