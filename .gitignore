@@ -1,0 +1,10 @@
+docker-database
+logs
+dist/
+www/
+node_modules/
+.env
+yarn.lock
+.history
+venv
+src/utils/cfgFiles

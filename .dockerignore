@@ -1,0 +1,23 @@
+node_modules
+# misc
+.DS_Store
+npm-debug.log*
+yarn-error.log
+
+/coverage
+.idea
+*bak
+.vscode
+
+# visual studio code
+.history
+*.log
+
+.temp/**
+
+logs
+
+www
+dist
+SIT_Profile_Analyzer_backend.zip
+venv
