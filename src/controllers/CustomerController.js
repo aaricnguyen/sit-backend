@@ -114,15 +114,17 @@ export const updateV2 = async (req, res) => {
           }
         }
         if(categoriesField[categoryFieldKey] !== 'featureCounts'){
-          if(!config[categoryFieldKey]){
+          if(!config[categoryFieldKey] || !Number(config[categoryFieldKey])){
             return
           }
-          totalConfig.push(categoryFieldKey)
-          if(isInternalCustomers){
-            internalCustomersObj[cust_id].totalConfig.push(categoryFieldKey)
-            // newItem.totalConfig.push(categoryFieldKey)
+          if (Number(config[categoryFieldKey]) > 0) {
+            totalConfig.push(categoryFieldKey)
+            if(isInternalCustomers){
+              internalCustomersObj[cust_id].totalConfig.push(categoryFieldKey)
+              // newItem.totalConfig.push(categoryFieldKey)
+            }
+            newItem[categoriesField[categoryFieldKey]].push(categoryFieldKey.replace(/^[^_]*_/,''))
           }
-          newItem[categoriesField[categoryFieldKey]].push(categoryFieldKey.replace(/^[^_]*_/,''))
         }else{
           newItem[categoriesField[categoryFieldKey]][categoryFieldKey] = config[categoryFieldKey]
         }
@@ -431,7 +433,7 @@ export const getExternalFeatureCountBySegment = async (req, res) => {
           const _value =  _rs[key] &&  _rs[key].sum >= 0 ? _rs[key].sum : 0;
           let min = _rs[key] &&  _rs[key].min >= 0 ? _rs[key].min : 0;
           let max = _rs[key] &&  _rs[key].max >= 0 ? _rs[key].max : 0;
-          const _newValue = (featureCounts[key] || 0) - 0
+          const _newValue = (Number(featureCounts[key]) || 0) - 0
           max = _newValue >  max ? _newValue : max;
           min = _newValue < min ? _newValue : min;
           _rs[key] = {
@@ -465,7 +467,7 @@ export const getExternalFeatureCountBySegment = async (req, res) => {
       const isFilterSegment = i.cust_segment == custom_segment
       return isFilterSegment && isFilterSW
     } )
-    avg =  getAvg(externalCustomersBySegment)
+    avg = getAvg(externalCustomersBySegment)
     sum = getSumCategory(externalCustomersBySegment)
     count = externalCustomersBySegment.length
   }
